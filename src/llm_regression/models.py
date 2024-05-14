@@ -4,17 +4,21 @@ import re
 import numpy as np
 from dotenv import load_dotenv
 from numpy.random import default_rng
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 from pandas import DataFrame
+from sklearn.metrics import mean_absolute_error, r2_score
 
 
-def predict(test_instance: DataFrame, train_data: DataFrame) -> DataFrame:
+def predict(
+        test_data: DataFrame, train_data: DataFrame, *, verbose: bool = False
+    ) -> DataFrame:
     """Score a dataset using an LLM.
 
     Args:
     ----
-        test_instance: Dataframe of features/variables to use for prediction.
+        test_data: Dataframe of features/variables to use for prediction.
         train_data: Dataframe of labelled features/variables to use for training.
+        verbose: Print prompt for first test data instances?
 
     Returns:
     -------
@@ -28,28 +32,35 @@ def predict(test_instance: DataFrame, train_data: DataFrame) -> DataFrame:
         "and only that, without any additional text."
     )
 
-    prompt_test_data = [
+    prompt_train_data = [
         f"Feature 0: {row.x}\nOutput: {row.y}" for row in train_data.itertuples()
     ]
 
-    prompt_test_data = [f"Feature 0: {test_instance['x'].values[0]}\nOutput:"]
+    y_pred: list[float] = []
+    for row in test_data.itertuples():
+        prompt_test_data = [f"Feature 0: {row.x}\nOutput:"]
 
-    user_prompt = "\n".join(prompt_test_data + prompt_test_data)
+        user_prompt = "\n".join(prompt_train_data + prompt_test_data)
+        if verbose:
+            print(user_prompt)
 
-    completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-    )
+        completion = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        try:
+            prediction = completion.choices[0].message.content
+        except BadRequestError as e:
+            raise ModelError("API call to LLM failed") from e
+        if prediction:
+            y_pred += [_parse_model_output(prediction)]
+        else:
+            raise ModelError("prediciton failed")
 
-    prediction = completion.choices[0].message.content
-    if prediction:
-        y_pred = _parse_model_output(prediction)
-    else:
-        raise ModelError("prediciton failed")
-    return DataFrame({"y_pred": [y_pred]})
+    return DataFrame({"y_pred": y_pred})
 
 
 def _parse_model_output(output: str) -> float:
@@ -92,8 +103,20 @@ class ModelError(Exception):
 
 
 if __name__ == "__main__":
-    data = make_univariate_linear_test_data(1001)
-    train_data = data.iloc[:1000,]
-    test_instance = data.iloc[1000:,]
-    y_pred = predict(test_instance, train_data)
-    print(f"x = {test_instance['x'].values[0]}, y_pred = {y_pred['y_pred'].values[0]}")
+    n_samples = 550
+    train_test_split_idx = 500
+    data = make_univariate_linear_test_data(n_samples)
+    train_data = data.iloc[:train_test_split_idx,]
+    test_data = data.iloc[train_test_split_idx:,]
+    y_pred = predict(test_data, train_data)
+
+    results = (
+        test_data.copy()
+        .reset_index(drop=True)
+        .assign(y_pred=y_pred["y_pred"])
+    )
+    mean_abs_err = mean_absolute_error(results["y"], results["y_pred"])
+    r_squared = r2_score(results["y"], results["y_pred"])
+    print(f"mean_abs_error = {mean_abs_err}")
+    print(f"r_squared = {r_squared}")
+    print(results)
