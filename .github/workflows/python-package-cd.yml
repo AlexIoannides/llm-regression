@@ -1,0 +1,30 @@
+name: Deploy Python package
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install Nox
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade setuptools
+        python -m pip install "nox==2023.4.22"
+    - name: Build wheel and push to PyPI
+      env:
+        PYPI_USR: ${{ secrets.PYPI_USR }}
+        PYPI_PWD: ${{ secrets.PYPI_PWD }}
+      run: |
+        nox -s build_and_deploy
