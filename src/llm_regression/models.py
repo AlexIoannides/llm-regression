@@ -13,8 +13,8 @@ from tqdm import tqdm
 
 
 def predict(
-        test_data: DataFrame, train_data: DataFrame, *, verbose: bool = False
-    ) -> DataFrame:
+    test_data: DataFrame, train_data: DataFrame, *, verbose: bool = False
+) -> DataFrame:
     """Score a dataset using an LLM.
 
     Args:
@@ -40,7 +40,10 @@ def predict(
     ]
 
     y_pred: list[float] = []
-    for row in tqdm(test_data.itertuples(), total=test_data.shape[0], ):
+    for row in tqdm(
+        test_data.itertuples(),
+        total=test_data.shape[0],
+    ):
         prompt_test_data = [f"Feature 0: {row.x}\nOutput:"]
 
         user_prompt = "\n\n".join(prompt_train_data + prompt_test_data)
@@ -51,7 +54,7 @@ def predict(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0,
             response_format={"type": "text"},
@@ -72,15 +75,15 @@ def predict(
 def _parse_model_output(output: str) -> float:
     """Parse the models's output."""
     try:
-        result = re.findall(r"-?\d+\.\d+", output)[0]
+        result = re.findall(r"-?\d+\.?\d*", output)[0]
         return float(result)
     except (ValueError, IndexError) as e:
         raise ModelError("invalid model prediction") from e
 
 
 def make_univariate_linear_test_data(
-        n_samples: int = 1000, *, rho: float = 0.75, seed: int = 42
-    ) -> DataFrame:
+    n_samples: int = 1000, *, rho: float = 0.75, seed: int = 42
+) -> DataFrame:
     """Simulate a y = rho * x + sqrt(1 - rho ** 2) * epsilon.
 
     Args:
@@ -119,11 +122,7 @@ if __name__ == "__main__":
     ols_regressor.fit(train_data[["x"]], train_data[["y"]])
     y_pred_ols = ols_regressor.predict(test_data[["x"]])
 
-    ols_results = (
-        test_data.copy()
-        .reset_index(drop=True)
-        .assign(y_pred=y_pred_ols)
-    )
+    ols_results = test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_ols)
     mean_abs_err_ols = mean_absolute_error(ols_results["y"], ols_results["y_pred"])
     r_squared_ols = r2_score(ols_results["y"], ols_results["y_pred"])
     print(f"mean_abs_error = {mean_abs_err_ols}")
@@ -133,9 +132,7 @@ if __name__ == "__main__":
     y_pred = predict(test_data, train_data)
 
     llm_results = (
-        test_data.copy()
-        .reset_index(drop=True)
-        .assign(y_pred=y_pred["y_pred"])
+        test_data.copy().reset_index(drop=True).assign(y_pred=y_pred["y_pred"])
     )
     mean_abs_err_llm = mean_absolute_error(llm_results["y"], llm_results["y_pred"])
     r_squared_llm = r2_score(llm_results["y"], llm_results["y_pred"])

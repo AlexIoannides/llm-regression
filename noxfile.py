@@ -10,7 +10,7 @@ nox.options.sessions = [
 ]
 
 
-@nox.session()
+@nox.session(reuse_venv=True)
 def run_tests(session: nox.Session):
     """Run unit tests."""
     session.install(".[dev]")
@@ -38,7 +38,7 @@ def check_code_formatting(session: nox.Session):
 def check_types(session: nox.Session):
     """Run static type checking."""
     session.install(".[dev]")
-    session.run("mypy", "src", "tests", "noxfile.py")
+    session.run("mypy")
 
 
 @nox.session(reuse_venv=True)
