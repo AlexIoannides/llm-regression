@@ -6,7 +6,10 @@ from dotenv import load_dotenv
 from numpy.random import default_rng
 from openai import BadRequestError, OpenAI
 from pandas import DataFrame
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 
 
 def predict(
@@ -37,19 +40,22 @@ def predict(
     ]
 
     y_pred: list[float] = []
-    for row in test_data.itertuples():
+    for row in tqdm(test_data.itertuples(), total=test_data.shape[0], ):
         prompt_test_data = [f"Feature 0: {row.x}\nOutput:"]
 
-        user_prompt = "\n".join(prompt_train_data + prompt_test_data)
+        user_prompt = "\n\n".join(prompt_train_data + prompt_test_data)
         if verbose:
             print(user_prompt)
 
         completion = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ]
+            ],
+            temperature=0,
+            response_format={"type": "text"},
+            seed=42,
         )
         try:
             prediction = completion.choices[0].message.content
@@ -73,14 +79,14 @@ def _parse_model_output(output: str) -> float:
 
 
 def make_univariate_linear_test_data(
-        n_samples: int = 1000, rho: float = 0.5, seed: int = 42
+        n_samples: int = 1000, *, rho: float = 0.75, seed: int = 42
     ) -> DataFrame:
-    """Simulate a y = beta * x + sigma * epsilon.
+    """Simulate a y = rho * x + sqrt(1 - rho ** 2) * epsilon.
 
     Args:
     ----
         n_samples: Number of samples to generate. Defaults to 1000.
-        rho: Rho coeffcient (correlation coefficient). Defaults to 1.
+        rho: Rho coeffcient (correlation coefficient). Defaults to 0.75.
         seed: Random seed. Defaults to 42.
 
     Returns:
@@ -103,20 +109,40 @@ class ModelError(Exception):
 
 
 if __name__ == "__main__":
-    n_samples = 550
-    train_test_split_idx = 500
-    data = make_univariate_linear_test_data(n_samples)
-    train_data = data.iloc[:train_test_split_idx,]
-    test_data = data.iloc[train_test_split_idx:,]
+    # make datasets
+    n_samples = 1000
+    dataset = make_univariate_linear_test_data(n_samples, rho=0.9)
+    train_data, test_data = train_test_split(dataset, test_size=0.05, random_state=42)
+
+    # ols regression
+    ols_regressor = LinearRegression()
+    ols_regressor.fit(train_data[["x"]], train_data[["y"]])
+    y_pred_ols = ols_regressor.predict(test_data[["x"]])
+
+    ols_results = (
+        test_data.copy()
+        .reset_index(drop=True)
+        .assign(y_pred=y_pred_ols)
+    )
+    mean_abs_err_ols = mean_absolute_error(ols_results["y"], ols_results["y_pred"])
+    r_squared_ols = r2_score(ols_results["y"], ols_results["y_pred"])
+    print(f"mean_abs_error = {mean_abs_err_ols}")
+    print(f"r_squared = {r_squared_ols}")
+
+    # llm regression
     y_pred = predict(test_data, train_data)
 
-    results = (
+    llm_results = (
         test_data.copy()
         .reset_index(drop=True)
         .assign(y_pred=y_pred["y_pred"])
     )
-    mean_abs_err = mean_absolute_error(results["y"], results["y_pred"])
-    r_squared = r2_score(results["y"], results["y_pred"])
-    print(f"mean_abs_error = {mean_abs_err}")
-    print(f"r_squared = {r_squared}")
-    print(results)
+    mean_abs_err_llm = mean_absolute_error(llm_results["y"], llm_results["y_pred"])
+    r_squared_llm = r2_score(llm_results["y"], llm_results["y_pred"])
+    print(f"mean_abs_error = {mean_abs_err_llm}")
+    print(f"r_squared = {r_squared_llm}")
+
+# mean_abs_error = 0.4107320869725583
+# r_squared = 0.7865828324377897
+# mean_abs_error = 0.38392287248603985
+# r_squared = 0.8083485333779725
