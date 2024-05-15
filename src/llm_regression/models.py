@@ -16,12 +16,7 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-OpenAiModel = Literal[
-    "gpt-3.5-turbo",
-    "gpt-4o",
-    "gpt-4-turbo",
-    "gpt-4"
-]
+OpenAiModel = Literal["gpt-3.5-turbo", "gpt-4o", "gpt-4-turbo", "gpt-4"]
 
 log = getLogger("OpenAIRegressionLogger")
 
@@ -105,7 +100,7 @@ class OpenAiRegressor:
             raise RuntimeError("please fit model before trying to generate predictions")
 
         _X = X if isinstance(X, ndarray) else X.values
-        y_pred: list[float | np.nan] = []
+        y_pred: list[float] = []
 
         for n, row in tqdm(enumerate(_X), total=len(_X)):
             try:
@@ -134,7 +129,8 @@ class OpenAiRegressor:
         """Generate the full prompt for getting a prediction."""
         return (
             self._prompt_instruction
-            + self._prompt_train_data + "\n\n"
+            + self._prompt_train_data
+            + "\n\n"
             + self._format_data_row(train_data_row)
         )
 
@@ -200,9 +196,7 @@ if __name__ == "__main__":
     llm_regressor.fit(train_data[["x"]], train_data[["y"]])
     y_pred_llm = llm_regressor.predict(test_data[["x"]])
 
-    llm_results = (
-        test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_llm)
-    )
+    llm_results = test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_llm)
     mean_abs_err_llm = mean_absolute_error(llm_results["y"], llm_results["y_pred"])
     r_squared_llm = r2_score(llm_results["y"], llm_results["y_pred"])
     print(f"mean_abs_error = {mean_abs_err_llm}")
