@@ -9,8 +9,10 @@ nox.options.sessions = [
     "run_tests",
 ]
 
+PYTHON = ["3.12"]
 
-@nox.session(reuse_venv=True)
+
+@nox.session(python=PYTHON, reuse_venv=True)
 def run_tests(session: nox.Session):
     """Run unit tests."""
     session.install(".[dev]")
@@ -18,7 +20,7 @@ def run_tests(session: nox.Session):
     session.run("pytest", *pytest_args)
 
 
-@nox.session(reuse_venv=True)
+@nox.session(python=PYTHON, reuse_venv=True)
 def format_code(session: nox.Session):
     """Lint code and re-format where necessary."""
     session.install(".[dev]")
@@ -26,7 +28,7 @@ def format_code(session: nox.Session):
     session.run("ruff", "check", ".", "--config=pyproject.toml", "--fix")
 
 
-@nox.session(reuse_venv=True)
+@nox.session(python=PYTHON, reuse_venv=True)
 def check_code_formatting(session: nox.Session):
     """Check code for formatting errors."""
     session.install(".[dev]")
@@ -34,14 +36,14 @@ def check_code_formatting(session: nox.Session):
     session.run("ruff", "check", ".", "--config=pyproject.toml")
 
 
-@nox.session(reuse_venv=True)
+@nox.session(python=PYTHON, reuse_venv=True)
 def check_types(session: nox.Session):
     """Run static type checking."""
     session.install(".[dev]")
     session.run("mypy")
 
 
-@nox.session(reuse_venv=True)
+@nox.session(python=PYTHON, reuse_venv=True)
 def build_and_deploy(session: nox.Session):
     """Build wheel and deploy to PyPI."""
     try:
