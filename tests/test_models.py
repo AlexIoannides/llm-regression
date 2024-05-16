@@ -7,7 +7,7 @@ from numpy.testing import assert_array_equal
 from pandas import DataFrame
 from pytest import LogCaptureFixture, raises
 
-from llm_regression.models import OpenAiRegressor
+from llm_regression import OpenAiRegressor
 
 
 def test_OpeanAiRegressor__repr__():

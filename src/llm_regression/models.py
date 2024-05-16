@@ -8,12 +8,8 @@ from typing import Literal
 import numpy as np
 from dotenv import load_dotenv
 from numpy import ndarray
-from numpy.random import default_rng
 from openai import OpenAI
 from pandas import DataFrame
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 OpenAiModel = Literal["gpt-3.5-turbo", "gpt-4o", "gpt-4-turbo", "gpt-4"]
@@ -151,60 +147,38 @@ class OpenAiRegressor:
         return float(result)
 
 
-def make_univariate_linear_test_data(
-    n_samples: int = 1000, *, rho: float = 0.75, seed: int = 42
-) -> DataFrame:
-    """Simulate a y = rho * x + sqrt(1 - rho ** 2) * epsilon.
-
-    This paradign ensures that the standard deviation of x and y is always 1, and that
-    x has correlation with y of rho.
-
-    Args:
-    ----
-        n_samples: Number of samples to generate. Defaults to 1000.
-        rho: Rho coeffcient (correlation coefficient). Defaults to 0.75.
-        seed: Random seed. Defaults to 42.
-
-    Returns:
-    -------
-        Dataframe of test data.
-    """
-    if not (rho >= 0 and rho <= 1):
-        raise ValueError(f"rho = {rho} - must in [0, 1]")
-    rng = default_rng(seed)
-    x = rng.standard_normal(n_samples)
-    epsilon = rng.standard_normal(n_samples)
-    y = rho * x + np.sqrt(1 - rho * rho) * epsilon
-    return DataFrame({"x": x, "y": y})
+# if __name__ == "__main__":
+# from sklearn.linear_model import LinearRegression
+# from sklearn.metrics import mean_absolute_error, r2_score
+# from sklearn.model_selection import train_test_split
 
 
-if __name__ == "__main__":
-    # make datasets
-    n_samples = 500
-    dataset = make_univariate_linear_test_data(n_samples, rho=0.9)
-    train_data, test_data = train_test_split(dataset, test_size=0.05, random_state=42)
+#     # make datasets
+#     n_samples = 500
+#     dataset = make_univariate_linear_test_data(n_samples, rho=0.9)
+#     train_data, test_data = train_test_split(dataset, test_size=0.05, random_state=42)
 
-    # ols regression
-    ols_regressor = LinearRegression()
-    ols_regressor.fit(train_data[["x"]], train_data[["y"]])
-    y_pred_ols = ols_regressor.predict(test_data[["x"]])
+#     # ols regression
+#     ols_regressor = LinearRegression()
+#     ols_regressor.fit(train_data[["x"]], train_data[["y"]])
+#     y_pred_ols = ols_regressor.predict(test_data[["x"]])
 
-    ols_results = test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_ols)
-    mean_abs_err_ols = mean_absolute_error(ols_results["y"], ols_results["y_pred"])
-    r_squared_ols = r2_score(ols_results["y"], ols_results["y_pred"])
-    print(f"mean_abs_error = {mean_abs_err_ols}")
-    print(f"r_squared = {r_squared_ols}")
+#     ols_results = test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_ols)
+#     mean_abs_err_ols = mean_absolute_error(ols_results["y"], ols_results["y_pred"])
+#     r_squared_ols = r2_score(ols_results["y"], ols_results["y_pred"])
+#     print(f"mean_abs_error = {mean_abs_err_ols}")
+#     print(f"r_squared = {r_squared_ols}")
 
-    # llm regression
-    llm_regressor = OpenAiRegressor()
-    llm_regressor.fit(train_data[["x"]], train_data[["y"]])
-    y_pred_llm = llm_regressor.predict(test_data[["x"]])
+#     # llm regression
+#     llm_regressor = OpenAiRegressor()
+#     llm_regressor.fit(train_data[["x"]], train_data[["y"]])
+#     y_pred_llm = llm_regressor.predict(test_data[["x"]])
 
-    llm_results = test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_llm)
-    mean_abs_err_llm = mean_absolute_error(llm_results["y"], llm_results["y_pred"])
-    r_squared_llm = r2_score(llm_results["y"], llm_results["y_pred"])
-    print(f"mean_abs_error = {mean_abs_err_llm}")
-    print(f"r_squared = {r_squared_llm}")
+#     llm_results = test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_llm)
+#     mean_abs_err_llm = mean_absolute_error(llm_results["y"], llm_results["y_pred"])
+#     r_squared_llm = r2_score(llm_results["y"], llm_results["y_pred"])
+#     print(f"mean_abs_error = {mean_abs_err_llm}")
+#     print(f"r_squared = {r_squared_llm}")
 
 # mean_abs_error = 0.4107320869725583
 # r_squared = 0.7865828324377897
