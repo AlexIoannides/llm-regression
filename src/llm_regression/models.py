@@ -1,4 +1,4 @@
-"""Regression models using LLMs."""
+"""Regression modelling using LLMs."""
 from __future__ import annotations
 
 import re
@@ -38,7 +38,7 @@ class OpenAiRegressor:
             "Your task is to provide your best estimate for ”Output”. Please provide "
             "that and only that, without any additional text."
         )
-        self._user_prompt: str = ""
+        self._prompt_train_data: str = ""
 
     def __repr__(self) -> str:
         """Create string representation."""
@@ -104,11 +104,14 @@ class OpenAiRegressor:
 
         for n, row in tqdm(enumerate(_X), total=len(_X)):
             try:
+                prediction_prompt = self._compose_prediction_prompt(
+                    self._prompt_instruction,
+                    self._prompt_train_data,
+                    self._format_data_row(row)
+                )
                 llm_response = self._client.chat.completions.create(
                     model=self._model,
-                    messages=[
-                        {"role": "user", "content": self._make_prediction_prompt(row)},
-                    ],
+                    messages=[{"role": "user", "content": prediction_prompt}],
                     temperature=0,
                     response_format={"type": "text"},
                     seed=42,
@@ -125,14 +128,12 @@ class OpenAiRegressor:
 
         return np.array(y_pred).reshape(-1, 1)
 
-    def _make_prediction_prompt(self, train_data_row: ndarray) -> str:
-        """Generate the full prompt for getting a prediction."""
-        return (
-            self._prompt_instruction
-            + self._prompt_train_data
-            + "\n\n"
-            + self._format_data_row(train_data_row)
-        )
+    @staticmethod
+    def _compose_prediction_prompt(
+        instruction: str, train_data: str, test_data: str
+    ) -> str:
+        """Compose full prompt from constituent parts."""
+        return instruction + "\n" + train_data + "\n\n" + test_data
 
     @staticmethod
     def _format_data_row(x_row: ndarray, y_row: ndarray | None = None) -> str:
@@ -154,6 +155,9 @@ def make_univariate_linear_test_data(
     n_samples: int = 1000, *, rho: float = 0.75, seed: int = 42
 ) -> DataFrame:
     """Simulate a y = rho * x + sqrt(1 - rho ** 2) * epsilon.
+
+    This paradign ensures that the standard deviation of x and y is always 1, and that
+    x has correlation with y of rho.
 
     Args:
     ----
