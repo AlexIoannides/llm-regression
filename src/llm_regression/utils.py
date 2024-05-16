@@ -10,7 +10,7 @@ def make_univariate_linear_test_data(
     """Simulate a y = rho * x + sqrt(1 - rho ** 2) * epsilon.
 
     This paradign ensures that the standard deviation of x and y is always 1, and that
-    x has correlation with y of rho.
+    x has correlation with y given by rho.
 
     Args:
     ----

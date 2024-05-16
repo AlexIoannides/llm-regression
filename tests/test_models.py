@@ -18,9 +18,7 @@ def test_OpeanAiRegressor__repr__():
 
 def test_OpeanAiRegressor_fit_makes_prompt_train_data_pandas_dataframe():
     with patch.multiple("llm_regression.models", load_dotenv=Mock, OpenAI=Mock):
-        train_data = DataFrame(
-            {"x0": [1.0, -0.1], "x1": [0.1, -1.0], "y": [1.0, 2.0]}
-        )
+        train_data = DataFrame({"x0": [1.0, -0.1], "x1": [0.1, -1.0], "y": [1.0, 2.0]})
         X = train_data[["x0", "x1"]]
         y = train_data[["y"]]
 
@@ -63,7 +61,6 @@ def test_OpeanAiRegressor_fit_raises_errors_on_inconsistent_inputs():
 
 
 def test_OpenAiRegressor_predict_returns_predictions():
-
     def make_mock_api_response(content: str | None) -> Mock:
         mock_response = Mock()
         mock_response.choices = [Mock()]
@@ -77,7 +74,7 @@ def test_OpenAiRegressor_predict_returns_predictions():
         mock_client.chat.completions.create.side_effect = [
             make_mock_api_response("Output: 1.0"),
             make_mock_api_response("Output: -1.0"),
-            make_mock_api_response(None)
+            make_mock_api_response(None),
         ]
         model = OpenAiRegressor()
         model._prompt_train_data = "Predict some stuff."
@@ -123,8 +120,13 @@ def test_OpeanAiRegressor_compose_prediction_prompt():
 
 def test_OpeanAiRegressor_format_data_row():
     assert OpenAiRegressor._format_data_row([1.0]) == "Feature 0: 1.0\nOutput: "
-    assert OpenAiRegressor._format_data_row([1.0, -0.1]) == "Feature 0: 1.0\nFeature 1: -0.1\nOutput: "  # noqa
-    assert OpenAiRegressor._format_data_row([1.0], [0.1]) == "Feature 0: 1.0\nOutput: 0.1"  # noqa
+    assert (
+        OpenAiRegressor._format_data_row([1.0, -0.1])
+        == "Feature 0: 1.0\nFeature 1: -0.1\nOutput: "
+    )  # noqa
+    assert (
+        OpenAiRegressor._format_data_row([1.0], [0.1]) == "Feature 0: 1.0\nOutput: 0.1"
+    )  # noqa
 
 
 def test_OpenAiRegressor_parse_model_output():

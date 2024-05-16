@@ -103,7 +103,7 @@ class OpenAiRegressor:
                 prediction_prompt = self._compose_prediction_prompt(
                     self._prompt_instruction,
                     self._prompt_train_data,
-                    self._format_data_row(row)
+                    self._format_data_row(row),
                 )
                 llm_response = self._client.chat.completions.create(
                     model=self._model,
@@ -145,42 +145,3 @@ class OpenAiRegressor:
         """Parse the models's output."""
         result = re.findall(r"-?\d+\.?\d*", output)[0]
         return float(result)
-
-
-# if __name__ == "__main__":
-# from sklearn.linear_model import LinearRegression
-# from sklearn.metrics import mean_absolute_error, r2_score
-# from sklearn.model_selection import train_test_split
-
-
-#     # make datasets
-#     n_samples = 500
-#     dataset = make_univariate_linear_test_data(n_samples, rho=0.9)
-#     train_data, test_data = train_test_split(dataset, test_size=0.05, random_state=42)
-
-#     # ols regression
-#     ols_regressor = LinearRegression()
-#     ols_regressor.fit(train_data[["x"]], train_data[["y"]])
-#     y_pred_ols = ols_regressor.predict(test_data[["x"]])
-
-#     ols_results = test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_ols)
-#     mean_abs_err_ols = mean_absolute_error(ols_results["y"], ols_results["y_pred"])
-#     r_squared_ols = r2_score(ols_results["y"], ols_results["y_pred"])
-#     print(f"mean_abs_error = {mean_abs_err_ols}")
-#     print(f"r_squared = {r_squared_ols}")
-
-#     # llm regression
-#     llm_regressor = OpenAiRegressor()
-#     llm_regressor.fit(train_data[["x"]], train_data[["y"]])
-#     y_pred_llm = llm_regressor.predict(test_data[["x"]])
-
-#     llm_results = test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_llm)
-#     mean_abs_err_llm = mean_absolute_error(llm_results["y"], llm_results["y_pred"])
-#     r_squared_llm = r2_score(llm_results["y"], llm_results["y_pred"])
-#     print(f"mean_abs_error = {mean_abs_err_llm}")
-#     print(f"r_squared = {r_squared_llm}")
-
-# mean_abs_error = 0.4107320869725583
-# r_squared = 0.7865828324377897
-# mean_abs_error = 0.38392287248603985
-# r_squared = 0.8083485333779725
