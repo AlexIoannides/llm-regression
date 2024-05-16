@@ -20,16 +20,18 @@ log = getLogger("OpenAIRegressionLogger")
 class OpenAiRegressor:
     """Generic regression using Open AI LLMs."""
 
-    def __init__(self, model: OpenAiModel = "gpt-3.5-turbo"):
+    def __init__(self, model: OpenAiModel = "gpt-3.5-turbo", seed: int = 42):
         """Initialise object.
 
         Args:
         ----
             model: Open AI model to use. Defaults to "gpt-3.5-turbo".
+            seed: Random seed to use with OpenAI model. Defaults to 42
         """
         load_dotenv()  # load OPEN_API_KEY from .env file (if present)
         self._client = OpenAI()
         self._model = model
+        self._model_seed = seed
         self._prompt_instruction = (
             "Your task is to provide your best estimate for ”Output”. Please provide "
             "that and only that, without any additional text."
@@ -110,7 +112,7 @@ class OpenAiRegressor:
                     messages=[{"role": "user", "content": prediction_prompt}],
                     temperature=0,
                     response_format={"type": "text"},
-                    seed=42,
+                    seed=self._model_seed,
                 )
                 llm_generation = llm_response.choices[0].message.content
                 if llm_generation:
