@@ -1,145 +1,149 @@
-"""Regression models using LLMs."""
+"""Regression modelling using LLMs."""
+from __future__ import annotations
+
 import re
+from logging import getLogger
+from typing import Literal
 
 import numpy as np
 from dotenv import load_dotenv
-from numpy.random import default_rng
-from openai import BadRequestError, OpenAI
+from numpy import ndarray
+from openai import OpenAI
 from pandas import DataFrame
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
+OpenAiModel = Literal["gpt-3.5-turbo", "gpt-4o", "gpt-4-turbo", "gpt-4"]
 
-def predict(
-    test_data: DataFrame, train_data: DataFrame, *, verbose: bool = False
-) -> DataFrame:
-    """Score a dataset using an LLM.
+log = getLogger("OpenAIRegressionLogger")
 
-    Args:
-    ----
-        test_data: Dataframe of features/variables to use for prediction.
-        train_data: Dataframe of labelled features/variables to use for training.
-        verbose: Print prompt for first test data instances?
 
-    Returns:
-    -------
-        A dataframe with predicted values for the test data.
-    """
-    load_dotenv()  # load OPEN_API_KEY from .env file (if present)
-    client = OpenAI()
+class OpenAiRegressor:
+    """Generic regression using Open AI LLMs."""
 
-    system_prompt = (
-        "Your task is to provide your best estimate for ”Output”. Please provide that "
-        "and only that, without any additional text."
-    )
+    def __init__(self, model: OpenAiModel = "gpt-3.5-turbo", seed: int = 42):
+        """Initialise object.
 
-    prompt_train_data = [
-        f"Feature 0: {row.x}\nOutput: {row.y}" for row in train_data.itertuples()
-    ]
-
-    y_pred: list[float] = []
-    for row in tqdm(
-        test_data.itertuples(),
-        total=test_data.shape[0],
-    ):
-        prompt_test_data = [f"Feature 0: {row.x}\nOutput:"]
-
-        user_prompt = "\n\n".join(prompt_train_data + prompt_test_data)
-        if verbose:
-            print(user_prompt)
-
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0,
-            response_format={"type": "text"},
-            seed=42,
+        Args:
+        ----
+            model: Open AI model to use. Defaults to "gpt-3.5-turbo".
+            seed: Random seed to use with OpenAI model. Defaults to 42
+        """
+        load_dotenv()  # load OPEN_API_KEY from .env file (if present)
+        self._client = OpenAI()
+        self._model = model
+        self._model_seed = seed
+        self._prompt_instruction = (
+            "Your task is to provide your best estimate for ”Output”. Please provide "
+            "that and only that, without any additional text."
         )
-        try:
-            prediction = completion.choices[0].message.content
-        except BadRequestError as e:
-            raise ModelError("API call to LLM failed") from e
-        if prediction:
-            y_pred += [_parse_model_output(prediction)]
-        else:
-            raise ModelError("prediciton failed")
+        self._prompt_train_data: str = ""
 
-    return DataFrame({"y_pred": y_pred})
+    def __repr__(self) -> str:
+        """Create string representation."""
+        return f"OpenAiRegressor(model={self._model})"
 
+    def fit(self, X: DataFrame | ndarray, y: DataFrame | ndarray) -> OpenAiRegressor:
+        """Create a prompt based on training data to use when predicting with an LLM.
 
-def _parse_model_output(output: str) -> float:
-    """Parse the models's output."""
-    try:
+        Args:
+        ----
+            X: Feature data.
+            y: Labels.
+
+        Raises:
+        ------
+            ValueError: If the dimensions of X or y are invalid and/or inconsistent with
+                one another.
+
+        Returns:
+        -------
+            The OpenAiRegressor object.
+        """
+        if X.ndim < 2:
+            raise ValueError("X.ndim must be >= 2")
+        if y.ndim < 2:
+            raise ValueError("y.ndim must be == 2")
+        if len(X) != len(y):
+            raise ValueError("len(y) != len(X)")
+
+        _X = X.tolist() if isinstance(X, ndarray) else X.values.tolist()
+        _y = y.tolist() if isinstance(y, ndarray) else y.values.tolist()
+
+        self._prompt_train_data = "\n\n".join(
+            [self._format_data_row(row, _y[n_row]) for n_row, row in enumerate(_X)]
+        )
+
+        return self
+
+    def predict(self, X: DataFrame | ndarray, logging: bool = True) -> ndarray:
+        """Predict labels using model and feature data.
+
+        Any prediction failures will return `numpy.nan` - prediction won't be halted,
+        given the expense of querying LLMs.
+
+        Args:
+        ----
+            X: Feature data to use for predictions.
+            logging: Enable logging. Default to True.
+
+        Raises:
+        ------
+            RuntimeError: If `.fit` has not been called.
+
+        Returns:
+        -------
+            Model predictions
+        """
+        if not self._prompt_train_data:
+            raise RuntimeError("please fit model before trying to generate predictions")
+
+        _X = X if isinstance(X, ndarray) else X.values
+        y_pred: list[float] = []
+
+        for n, row in tqdm(enumerate(_X), total=len(_X)):
+            try:
+                prediction_prompt = self._compose_prediction_prompt(
+                    self._prompt_instruction,
+                    self._prompt_train_data,
+                    self._format_data_row(row),
+                )
+                llm_response = self._client.chat.completions.create(
+                    model=self._model,
+                    messages=[{"role": "user", "content": prediction_prompt}],
+                    temperature=0,
+                    response_format={"type": "text"},
+                    seed=self._model_seed,
+                )
+                llm_generation = llm_response.choices[0].message.content
+                if llm_generation:
+                    y_pred += [self._parse_model_output(llm_generation)]
+                else:
+                    y_pred += [np.nan]
+            except Exception as e:
+                if logging:
+                    log.warning(f"LLM error for test data row #{n} - {str(e)}")
+                y_pred += [np.nan]
+
+        return np.array(y_pred).reshape(-1, 1)
+
+    @staticmethod
+    def _compose_prediction_prompt(
+        instruction: str, train_data: str, test_data: str
+    ) -> str:
+        """Compose full prompt from constituent parts."""
+        return instruction + "\n" + train_data + "\n\n" + test_data
+
+    @staticmethod
+    def _format_data_row(x_row: ndarray, y_row: ndarray | None = None) -> str:
+        """Format a data row for inclusion in model prompt."""
+        output = y_row[0] if y_row else ""
+        prompt_data = "\n".join(
+            [f"Feature {n}: {x}" for n, x in enumerate(x_row)] + [f"Output: {output}"]
+        )
+        return prompt_data
+
+    @staticmethod
+    def _parse_model_output(output: str) -> float:
+        """Parse the models's output."""
         result = re.findall(r"-?\d+\.?\d*", output)[0]
         return float(result)
-    except (ValueError, IndexError) as e:
-        raise ModelError("invalid model prediction") from e
-
-
-def make_univariate_linear_test_data(
-    n_samples: int = 1000, *, rho: float = 0.75, seed: int = 42
-) -> DataFrame:
-    """Simulate a y = rho * x + sqrt(1 - rho ** 2) * epsilon.
-
-    Args:
-    ----
-        n_samples: Number of samples to generate. Defaults to 1000.
-        rho: Rho coeffcient (correlation coefficient). Defaults to 0.75.
-        seed: Random seed. Defaults to 42.
-
-    Returns:
-    -------
-        Dataframe of test data.
-    """
-    if not (rho >= 0 and rho <= 1):
-        raise ValueError(f"rho = {rho} - must in [0, 1]")
-    rng = default_rng(seed)
-    x = rng.standard_normal(n_samples)
-    epsilon = rng.standard_normal(n_samples)
-    y = rho * x + np.sqrt(1 - rho * rho) * epsilon
-    return DataFrame({"x": x, "y": y})
-
-
-class ModelError(Exception):
-    """Custom exception class for model errors."""
-
-    pass
-
-
-if __name__ == "__main__":
-    # make datasets
-    n_samples = 1000
-    dataset = make_univariate_linear_test_data(n_samples, rho=0.9)
-    train_data, test_data = train_test_split(dataset, test_size=0.05, random_state=42)
-
-    # ols regression
-    ols_regressor = LinearRegression()
-    ols_regressor.fit(train_data[["x"]], train_data[["y"]])
-    y_pred_ols = ols_regressor.predict(test_data[["x"]])
-
-    ols_results = test_data.copy().reset_index(drop=True).assign(y_pred=y_pred_ols)
-    mean_abs_err_ols = mean_absolute_error(ols_results["y"], ols_results["y_pred"])
-    r_squared_ols = r2_score(ols_results["y"], ols_results["y_pred"])
-    print(f"mean_abs_error = {mean_abs_err_ols}")
-    print(f"r_squared = {r_squared_ols}")
-
-    # llm regression
-    y_pred = predict(test_data, train_data)
-
-    llm_results = (
-        test_data.copy().reset_index(drop=True).assign(y_pred=y_pred["y_pred"])
-    )
-    mean_abs_err_llm = mean_absolute_error(llm_results["y"], llm_results["y_pred"])
-    r_squared_llm = r2_score(llm_results["y"], llm_results["y_pred"])
-    print(f"mean_abs_error = {mean_abs_err_llm}")
-    print(f"r_squared = {r_squared_llm}")
-
-# mean_abs_error = 0.4107320869725583
-# r_squared = 0.7865828324377897
-# mean_abs_error = 0.38392287248603985
-# r_squared = 0.8083485333779725
