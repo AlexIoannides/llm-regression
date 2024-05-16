@@ -123,7 +123,7 @@ class OpenAiRegressor:
                     y_pred += [np.nan]
             except Exception as e:
                 if logging:
-                    log.warn(f"LLM error for test data row #{n} - {str(e)}")
+                    log.warning(f"LLM error for test data row #{n} - {str(e)}")
                 y_pred += [np.nan]
 
         return np.array(y_pred).reshape(-1, 1)

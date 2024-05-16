@@ -1,12 +1,19 @@
 """Tests for LLM regression modelling."""
 from re import escape
-from unittest.mock import Mock, patch
+from unittest.mock import DEFAULT, Mock, patch
 
-from numpy import array
+from numpy import array, nan
+from numpy.testing import assert_array_equal
 from pandas import DataFrame
-from pytest import raises
+from pytest import LogCaptureFixture, raises
 
 from llm_regression.models import OpenAiRegressor
+
+
+def test_OpeanAiRegressor__repr__():
+    with patch.multiple("llm_regression.models", load_dotenv=Mock, OpenAI=Mock):
+        model = OpenAiRegressor()
+        assert repr(model) == "OpenAiRegressor(model=gpt-3.5-turbo)"
 
 
 def test_OpeanAiRegressor_fit_makes_prompt_train_data_pandas_dataframe():
@@ -55,10 +62,59 @@ def test_OpeanAiRegressor_fit_raises_errors_on_inconsistent_inputs():
             model.fit(array([[1.0, 0.1], [-0.1, -1.0]]), array([[1.0]]))
 
 
-def test_OpeanAiRegressor__repr__():
-    with patch.multiple("llm_regression.models", load_dotenv=Mock, OpenAI=Mock):
+def test_OpenAiRegressor_predict_returns_predictions():
+
+    def make_mock_api_response(content: str | None) -> Mock:
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = content
+        return mock_response
+
+    with patch.multiple(
+        "llm_regression.models", load_dotenv=DEFAULT, OpenAI=DEFAULT
+    ) as mock_objs:
+        mock_client = mock_objs["OpenAI"].return_value
+        mock_client.chat.completions.create.side_effect = [
+            make_mock_api_response("Output: 1.0"),
+            make_mock_api_response("Output: -1.0"),
+            make_mock_api_response(None)
+        ]
         model = OpenAiRegressor()
-        assert repr(model) == "OpenAiRegressor(model=gpt-3.5-turbo)"
+        model._prompt_train_data = "Predict some stuff."
+        y_pred = model.predict(array([[1.0], [0.1], [0.0]]))
+        assert_array_equal(y_pred, array([[1.0], [-1.0], [nan]]))
+
+
+def test_OpenAiRegressor_predict_handles_response_errors():
+    with patch.multiple(
+        "llm_regression.models", load_dotenv=DEFAULT, OpenAI=DEFAULT
+    ) as mock_objs:
+        mock_client = mock_objs["OpenAI"].return_value
+        mock_client.chat.completions.create.side_effect = [Exception, Exception]
+        model = OpenAiRegressor()
+        model._prompt_train_data = "Predict some stuff."
+        y_pred = model.predict(array([[1.0], [0.1]]))
+        assert_array_equal(y_pred, array([[nan], [nan]]))
+
+
+def test_OpenAiRegressor_predict_logs_errors(caplog: LogCaptureFixture):
+    with patch.multiple(
+        "llm_regression.models", load_dotenv=DEFAULT, OpenAI=DEFAULT
+    ) as mock_objs:
+        mock_client = mock_objs["OpenAI"].return_value
+        mock_client.chat.completions.create.side_effect = Exception("foo")
+        model = OpenAiRegressor()
+        model._prompt_train_data = "Predict some stuff."
+        model.predict(array([[1.0]]))
+
+        log_record_one = caplog.records[0]
+        assert len(caplog.records) == 1
+        assert log_record_one.levelname == "WARNING"
+        assert log_record_one.message == "LLM error for test data row #0 - foo"
+
+        # make sure we can switch logging off
+        model.predict(array([[1.0]]), logging=False)
+        assert len(caplog.records) == 1
 
 
 def test_OpeanAiRegressor_compose_prediction_prompt():
