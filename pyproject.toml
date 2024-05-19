@@ -16,6 +16,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+examples = [
+  "pandas==2.2.2",
+  "scikit-learn==1.4.2",
+  "seaborn==0.13.2",
+]
 dev = [
   "black==23.9.1",
   "python-dotenv>=1.0.0",
