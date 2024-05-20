@@ -1,6 +1,6 @@
 # Regression using LLMs
 
-The llm_regression package demonstrates how LLMs can be used to solve classical regression problems, and exposes these capabilities for you to experiment with. Example:
+The llm-regression package demonstrates how LLMs can be used to solve classical regression problems, and exposes these capabilities for you to experiment with. Example:
 
 ```python
 from llm_regression import OpenAiRegressor
@@ -22,7 +22,7 @@ You can install the llm_regression package, together with the dependencies requi
 
 ```text
 pip install -U pip
-pip install "llm_regression[examples] @ git+https://github.com/AlexIoannides/llm-regression.git"
+pip install "llm-regression[examples] @ git+https://github.com/AlexIoannides/llm-regression.git"
 ```
 
 ## Examples
